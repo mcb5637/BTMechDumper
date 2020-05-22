@@ -1,0 +1,10 @@
+﻿{
+  "Name": "BTMechDumper",
+  "Enabled": true,
+
+  "Description": "Dumps mech data",
+  "Author": "mcb",
+  "Website": "https://github.com/mcb5637/BTMechDumper",
+
+  "DLL": "BTMechDumper.dll"
+}
