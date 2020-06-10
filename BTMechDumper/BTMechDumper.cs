@@ -187,19 +187,34 @@ namespace BTMechDumper
             MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.RightLeg, ref bal, ref en, ref mis, ref sup);
             r.DataTxt[2] = bal + "/" + en + "/" + mis + "/" + sup;
             r.DataTxt[3] = (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + "/" + d.Chassis.Heatsinks;
-            r.DataTxt[4] = d.Chassis.MovementCapDef.MaxWalkDistance + "/" + d.Chassis.MaxJumpjets;
+            if (d.Chassis.MovementCapDef == null)
+            {
+                d.Chassis.RefreshMovementCaps();
+                if (d.Chassis.MovementCapDef==null)
+                {
+                    r.DataTxt[4] ="??/" + d.Chassis.MaxJumpjets;
+                }
+                else
+                {
+                    r.DataTxt[4] = d.Chassis.MovementCapDef.MaxWalkDistance + "/" + d.Chassis.MaxJumpjets;
+                }
+            }
+            else
+            {
+                r.DataTxt[4] = d.Chassis.MovementCapDef.MaxWalkDistance + "/" + d.Chassis.MaxJumpjets;
+            }
             r.DataTxt[5] = d.Chassis.MeleeDamage + "/" + d.Chassis.MeleeInstability + "/" + d.Chassis.DFADamage + "/" + d.Chassis.DFAInstability;
             r.DataTxt[6] = active + "/" + storage + "/" + parts + "/" + maxparts;
-            r.DataTxt[7] = d.Chassis.Description.Id + "";
+            r.DataTxt[7] = d.Chassis.Description.Id + "/" + d.Description.Id;
             r.DataTxt[8] = d.Chassis.YangsThoughts + "";
             r.Sort = string.Format("{0,3}_{1}", new object[] { d.Chassis.Tonnage, d.Chassis.VariantName });
             r.DataCsv = d.Chassis.Tonnage + ";" + d.Chassis.Description.UIName + ";" + d.Chassis.VariantName + ";" + d.Chassis.StockRole;
             r.DataCsv += ";" + bal + ";" + en + ";" + mis + ";" + sup;
             r.DataCsv += ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + ";" + d.Chassis.Heatsinks;
-            r.DataCsv += ";" + d.Chassis.MovementCapDef.MaxWalkDistance + ";" + d.Chassis.MaxJumpjets;
+            r.DataCsv += ";" + (d.Chassis.MovementCapDef==null ? -1f : d.Chassis.MovementCapDef.MaxWalkDistance) + ";" + d.Chassis.MaxJumpjets;
             r.DataCsv += ";" + d.Chassis.MeleeDamage + ";" + d.Chassis.MeleeInstability + ";" + d.Chassis.DFADamage + ";" + d.Chassis.DFAInstability;
             r.DataCsv += ";" + active + ";" + storage + ";" + parts + ";" + maxparts;
-            r.DataCsv += ";" + d.Chassis.Description.Id;
+            r.DataCsv += ";" + d.Chassis.Description.Id + "/" + d.Description.Id;
             return r;
         }
 
@@ -215,11 +230,11 @@ namespace BTMechDumper
                 "walkDist/maxJJ",
                 "m DMG/m INS/DFA DMG/ DFA INS",
                 "active/storage/parts/partsneeded",
-                "ID",
+                "chassisID/mechID",
                 "Yangs thougths",
             };
             r.Sort = "";
-            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;id";
+            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID";
             return r;
         }
 
