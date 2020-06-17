@@ -6,18 +6,33 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace BTMechDumper
 {
     class BTMechDumper
     {
+        public delegate int SMA_GetNumPartsForAssembly(SimGameState s, MechDef m);
+        public static SMA_GetNumPartsForAssembly Del_SMA_GetNumPartsForAssembly = null;
+
         public static void Init(string dir, string sett)
         {
             var harmony = HarmonyInstance.Create("com.github.mcb5637.BTMechDumper");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+            // some reflection magic to get a delegate of BTSimpleMechAssembly.SimpleMechAssembly_Main.GetNumPartsForAssembly if that mod is loaded
+            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (a.GetName().Name.Equals("BTSimpleMechAssembly")) {
+                    Type t = a.GetType("BTSimpleMechAssembly.SimpleMechAssembly_Main");
+                    Del_SMA_GetNumPartsForAssembly = (SMA_GetNumPartsForAssembly) Delegate.CreateDelegate(typeof(SMA_GetNumPartsForAssembly), t.GetMethod("GetNumPartsForAssembly"));
+                }
+            }
         }
+
+
 
         public static void DumpData(SimGameState s)
         {
@@ -60,16 +75,21 @@ namespace BTMechDumper
                 int part = s.GetItemCount(kv.Key, "MECHPART", SimGameState.ItemCountType.UNDAMAGED_ONLY);
                 int mechstor = s.GetItemCount(kv.Value.Chassis.Description.Id, kv.Value.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY);
                 int active = 0;
+                int sma_parts = -1;
                 MechDef d = kv.Value;
                 foreach (KeyValuePair<int, MechDef> a in s.ActiveMechs)
                 {
                     if (kv.Value.ChassisID==a.Value.ChassisID)
                     {
                         active++;
-                        d = a.Value;
+                        //d = a.Value;
                     }
                 }
-                DumperDataEntry e = FillMech(d, part, s.Constants.Story.DefaultMechPartMax, mechstor, active);
+                if (Del_SMA_GetNumPartsForAssembly!=null)
+                {
+                    sma_parts = Del_SMA_GetNumPartsForAssembly(s, kv.Value);
+                }
+                DumperDataEntry e = FillMech(d, part, s.Constants.Story.DefaultMechPartMax, mechstor, active, sma_parts);
                 if (kv.Value.MechTags.Contains("BLACKLISTED"))
                     blacklist.Add(kv.Key, e);
                 else
@@ -167,7 +187,11 @@ namespace BTMechDumper
             public string Sort;
         }
 
-        private static DumperDataEntry FillMech(MechDef d, int parts, int maxparts, int storage, int active)
+        private static readonly ChassisLocations[] AllChassisLocs = new ChassisLocations[] { ChassisLocations.Head, ChassisLocations.CenterTorso, ChassisLocations.LeftTorso, ChassisLocations.RightTorso,
+            ChassisLocations.LeftArm, ChassisLocations.RightArm, ChassisLocations.LeftLeg, ChassisLocations.RightLeg };
+        private static readonly string[] ExtrasToNote = new string[] { "chassis_ferro", "chassis_endo", "chassis_dhs", "chassis_omni" };
+
+        private static DumperDataEntry FillMech(MechDef d, int parts, int maxparts, int storage, int active, int sma_parts)
         {
             DumperDataEntry r = new DumperDataEntry();
             r.DataTxt = new string[9];
@@ -177,16 +201,33 @@ namespace BTMechDumper
             int en = 0;
             int mis = 0;
             int sup = 0;
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.Head, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.CenterTorso, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.LeftTorso, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.RightTorso, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.LeftArm, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.RightArm, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.LeftLeg, ref bal, ref en, ref mis, ref sup);
-            MechStatisticsRules.GetHardpointCountForLocation(d, ChassisLocations.RightLeg, ref bal, ref en, ref mis, ref sup);
+            foreach (ChassisLocations c in AllChassisLocs)
+                MechStatisticsRules.GetHardpointCountForLocation(d, c, ref bal, ref en, ref mis, ref sup);
             r.DataTxt[2] = bal + "/" + en + "/" + mis + "/" + sup;
             r.DataTxt[3] = (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + "/" + d.Chassis.Heatsinks;
+            float carmor = 0;
+            float marmor = 0;
+            foreach (ChassisLocations c in AllChassisLocs)
+            {
+                carmor += d.GetLocationLoadoutDef(c).AssignedArmor;
+                marmor += d.GetChassisLocationDef(c).MaxArmor;
+                if (d.GetChassisLocationDef(c).MaxRearArmor > 0)
+                {
+                    carmor += d.GetLocationLoadoutDef(c).AssignedRearArmor;
+                    marmor += d.GetChassisLocationDef(c).MaxRearArmor;
+                }
+            }
+            float div = UnityGameInstance.BattleTechGame.MechStatisticsConstants.ARMOR_PER_TENTH_TON * 10f;
+            if (d.Chassis.ChassisTags.Contains("chassis_ferro"))
+                if (d.Chassis.ChassisTags.Contains("chassis_clan"))
+                    div = UnityGameInstance.BattleTechGame.MechStatisticsConstants.ARMOR_PER_TENTH_TON * 12f;
+                else
+                    div = UnityGameInstance.BattleTechGame.MechStatisticsConstants.ARMOR_PER_TENTH_TON * 11.2f;
+            carmor /= div;
+            marmor /= div;
+            carmor = Mathf.Round(carmor * 10) / 10;
+            marmor = Mathf.Round(marmor * 10) / 10;
+            r.DataTxt[3] += "/" + carmor + "/" + marmor;
             if (d.Chassis.MovementCapDef == null)
             {
                 d.Chassis.RefreshMovementCaps();
@@ -204,17 +245,74 @@ namespace BTMechDumper
                 r.DataTxt[4] = d.Chassis.MovementCapDef.MaxWalkDistance + "/" + d.Chassis.MaxJumpjets;
             }
             r.DataTxt[5] = d.Chassis.MeleeDamage + "/" + d.Chassis.MeleeInstability + "/" + d.Chassis.DFADamage + "/" + d.Chassis.DFAInstability;
-            r.DataTxt[6] = active + "/" + storage + "/" + parts + "/" + maxparts;
+            r.DataTxt[6] = active + "/" + storage + "/" + parts;
+            if (sma_parts >=0)
+                r.DataTxt[6] += "(" + sma_parts + ")";
+            r.DataTxt[6] += "/" + maxparts;
             r.DataTxt[7] = d.Chassis.Description.Id + "/" + d.Description.Id;
-            r.DataTxt[8] = d.Chassis.YangsThoughts + "";
+            Dictionary<string, int> eq = new Dictionary<string, int>();
+            Dictionary<string, int> feq = new Dictionary<string, int>();
+            foreach (MechComponentRef c in d.Inventory)
+            {
+                if (c.ComponentDefType == ComponentType.Weapon)
+                {
+                    WeaponDef wep = c.Def as WeaponDef;
+                    if (wep != null && wep.WeaponCategoryValue.IsMelee || wep.WeaponSubType == WeaponSubType.AIImaginary || wep.WeaponEffectID.Contains("WeaponEffect-Artillery"))
+                        continue;
+                }
+                string key = c.Def.Description.Id;
+                if (c.IsFixed)
+                {
+                    if (feq.ContainsKey(key))
+                        feq[key]++;
+                    else
+                        feq.Add(key, 1);
+                }
+                else
+                {
+                    if (eq.ContainsKey(key))
+                        eq[key]++;
+                    else
+                        eq.Add(key, 1);
+                }
+            }
+            string txteq = "";
+            string txtfeq = "";
+            foreach (string key in eq.Keys.OrderBy((k) => k))
+            {
+                if (!string.IsNullOrEmpty(txteq))
+                    txteq += ",";
+                txteq += key + ":" + eq[key];
+            }
+            foreach (string key in feq.Keys.OrderBy((k) => k))
+            {
+                if (!string.IsNullOrEmpty(txtfeq))
+                    txtfeq += ",";
+                txtfeq += key + ":" + feq[key];
+            }
+            string txtext = "";
+            foreach (string ex in ExtrasToNote)
+            {
+                if (d.Chassis.ChassisTags.Contains(ex))
+                {
+                    if (!string.IsNullOrEmpty(txtext))
+                        txtext += ",";
+                    txtext += ex;
+                }
+            }
+            r.DataTxt[8] = txtext + "/" + txteq + "/" + txtfeq;
             r.Sort = string.Format("{0,3}_{1}", new object[] { d.Chassis.Tonnage, d.Chassis.VariantName });
             r.DataCsv = d.Chassis.Tonnage + ";" + d.Chassis.Description.UIName + ";" + d.Chassis.VariantName + ";" + d.Chassis.StockRole;
             r.DataCsv += ";" + bal + ";" + en + ";" + mis + ";" + sup;
-            r.DataCsv += ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + ";" + d.Chassis.Heatsinks;
+            r.DataCsv += ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + ";" + d.Chassis.Heatsinks + ";" + carmor + ";" + marmor;
             r.DataCsv += ";" + (d.Chassis.MovementCapDef==null ? -1f : d.Chassis.MovementCapDef.MaxWalkDistance) + ";" + d.Chassis.MaxJumpjets;
             r.DataCsv += ";" + d.Chassis.MeleeDamage + ";" + d.Chassis.MeleeInstability + ";" + d.Chassis.DFADamage + ";" + d.Chassis.DFAInstability;
-            r.DataCsv += ";" + active + ";" + storage + ";" + parts + ";" + maxparts;
-            r.DataCsv += ";" + d.Chassis.Description.Id + "/" + d.Description.Id;
+            r.DataCsv += ";" + active + ";" + storage + ";" + parts;
+            if (sma_parts >= 0)
+                r.DataCsv += "(" + sma_parts + ")";
+            r.DataCsv += ";" + maxparts;
+            r.DataCsv += ";" + d.Chassis.Description.Id + ";" + d.Description.Id;
+            r.DataCsv += ";" + txtext + ";" + txteq + ";" + txtfeq;
             return r;
         }
 
@@ -226,15 +324,15 @@ namespace BTMechDumper
                 "Mech",
                 "Role",
                 "b/e/m/s",
-                "useTon/heatsink",
+                "useTon/heatsink/armorT/maxarmorT",
                 "walkDist/maxJJ",
                 "m DMG/m INS/DFA DMG/ DFA INS",
                 "active/storage/parts/partsneeded",
                 "chassisID/mechID",
-                "Yangs thougths",
+                "extras/Equip/FixedEquip",
             };
             r.Sort = "";
-            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID";
+            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
             return r;
         }
 

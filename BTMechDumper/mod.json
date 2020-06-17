@@ -6,5 +6,7 @@
   "Author": "mcb",
   "Website": "https://github.com/mcb5637/BTMechDumper",
 
+  "OptionallyDependsOn": [ "BTSimpleMechAssembly" ],
+
   "DLL": "BTMechDumper.dll"
 }
