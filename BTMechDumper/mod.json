@@ -5,6 +5,7 @@
   "Description": "Dumps mech data",
   "Author": "mcb",
   "Website": "https://github.com/mcb5637/BTMechDumper",
+  "Version": "1.1",
 
   "OptionallyDependsOn": [ "BTSimpleMechAssembly" ],
 

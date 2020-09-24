@@ -116,11 +116,24 @@ namespace BTMechDumper
         {
             List<DumperDataEntry> weps = new List<DumperDataEntry>();
             weps.Add(GetWeaponDesc());
+            Dictionary<string, float> ammoShotsPerTon = new Dictionary<string, float>();
+            foreach (KeyValuePair<string, AmmunitionBoxDef> kv in s.DataManager.AmmoBoxDefs)
+            {
+                float apt = kv.Value.Capacity / kv.Value.Tonnage;
+                if (!ammoShotsPerTon.ContainsKey(kv.Value.AmmoID))
+                {
+                    ammoShotsPerTon.Add(kv.Value.AmmoID, apt);
+                }
+                else if (ammoShotsPerTon[kv.Value.AmmoID] < apt)
+                {
+                    ammoShotsPerTon[kv.Value.AmmoID] = apt;
+                }
+            }
             foreach (KeyValuePair<string, WeaponDef> kv in s.DataManager.WeaponDefs)
             {
                 if (kv.Value.WeaponCategoryValue.IsMelee || kv.Value.WeaponSubType==WeaponSubType.AIImaginary || kv.Value.WeaponEffectID.Contains("WeaponEffect-Artillery"))
                     continue;
-                weps.Add(FillWeapon(kv.Value));
+                weps.Add(FillWeapon(kv.Value, ammoShotsPerTon));
             }
             WriteDataEntries(weps, w, csv);
         }
@@ -227,7 +240,7 @@ namespace BTMechDumper
             marmor /= div;
             carmor = Mathf.Round(carmor * 10) / 10;
             marmor = Mathf.Round(marmor * 10) / 10;
-            r.DataTxt[3] += "/" + carmor + "/" + marmor;
+            r.DataTxt[3] += "/" + carmor + "/" + marmor + "/" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage - marmor);
             if (d.Chassis.MovementCapDef == null)
             {
                 d.Chassis.RefreshMovementCaps();
@@ -304,7 +317,7 @@ namespace BTMechDumper
             r.Sort = string.Format("{0,3}_{1}", new object[] { d.Chassis.Tonnage, d.Chassis.VariantName });
             r.DataCsv = d.Chassis.Tonnage + ";" + d.Chassis.Description.UIName + ";" + d.Chassis.VariantName + ";" + d.Chassis.StockRole;
             r.DataCsv += ";" + bal + ";" + en + ";" + mis + ";" + sup;
-            r.DataCsv += ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + ";" + d.Chassis.Heatsinks + ";" + carmor + ";" + marmor;
+            r.DataCsv += ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage) + ";" + d.Chassis.Heatsinks + ";" + carmor + ";" + marmor + ";" + (d.Chassis.Tonnage - d.Chassis.InitialTonnage - marmor);
             r.DataCsv += ";" + (d.Chassis.MovementCapDef==null ? -1f : d.Chassis.MovementCapDef.MaxWalkDistance) + ";" + d.Chassis.MaxJumpjets;
             r.DataCsv += ";" + d.Chassis.MeleeDamage + ";" + d.Chassis.MeleeInstability + ";" + d.Chassis.DFADamage + ";" + d.Chassis.DFAInstability;
             r.DataCsv += ";" + active + ";" + storage + ";" + parts;
@@ -324,7 +337,7 @@ namespace BTMechDumper
                 "Mech",
                 "Role",
                 "b/e/m/s",
-                "useTon/heatsink/armorT/maxarmorT",
+                "useTon/heatsink/armorT/maxarmorT/useTonnsWithMArmor",
                 "walkDist/maxJJ",
                 "m DMG/m INS/DFA DMG/ DFA INS",
                 "active/storage/parts/partsneeded",
@@ -332,7 +345,7 @@ namespace BTMechDumper
                 "extras/Equip/FixedEquip",
             };
             r.Sort = "";
-            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
+            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;useTonnsWithMArmor;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
             return r;
         }
 
@@ -381,9 +394,9 @@ namespace BTMechDumper
             return r;
         }
 
-        private static DumperDataEntry FillWeapon(WeaponDef d)
+        private static DumperDataEntry FillWeapon(WeaponDef d, Dictionary<string, float> ammoShotsPerTonn)
         {
-            DumperDataEntry r = FillComp(d, 4, 4);
+            DumperDataEntry r = FillComp(d, 5, 5);
             r.DataTxt[1] = d.Damage + "/" + d.StructureDamage + "/" + d.Instability + "/" + d.HeatDamage + "*" + d.ShotsWhenFired;
             r.DataTxt[2] = d.MinRange + "/" + d.MediumRange + "/" + d.MaxRange;
             if (d.ComponentTags.Contains("range_extreme"))
@@ -398,26 +411,60 @@ namespace BTMechDumper
                 r.DataTxt[2] = "Close (" + r.DataTxt[2] + ")";
             r.DataTxt[3] = d.AccuracyModifier + "/" + d.CriticalChanceMultiplier + "/" + d.IndirectFireCapable + "/" + d.RefireModifier;
             r.DataTxt[4] = d.AmmoCategoryToAmmoId + "/" + d.StartingAmmoCapacity;
+            float efftonn = d.Tonnage;
+            float ammotonns = 0;
+            if (!string.IsNullOrEmpty(d.AmmoCategoryToAmmoId) && ammoShotsPerTonn.ContainsKey(d.AmmoCategoryToAmmoId)) // add ammo tonnage
+            {
+                float shots = 10 * d.ShotsWhenFired - d.StartingAmmoCapacity;
+                if (shots > 0)
+                {
+                    ammotonns += shots / ammoShotsPerTonn[d.AmmoCategoryToAmmoId];
+                    efftonn += ammotonns;
+                }
+            }
+            float efftonndhs = efftonn;
+            efftonn += d.HeatGenerated / 3; // heat w standard heatsinks
+            efftonndhs += d.HeatGenerated / 6; // heat w double heatsinks
+            float effdmg = (d.Damage + d.StructureDamage + d.HeatDamage + d.Instability) * d.ShotsWhenFired;
+            float accmod = 0.5f + (-d.AccuracyModifier * 0.05f);
+            float rmod = GetWeaponRangeFactor(d);
+            float rating = Mathf.Round(effdmg * accmod * rmod / efftonn * 100) / 100;
+            float ratingdhs = Mathf.Round(effdmg * accmod * rmod / efftonndhs * 100) / 100;
+            r.DataTxt[5] = efftonn + "/" + efftonndhs + "/" + rating + "/" + ratingdhs;
             r.DataCsv += ";" + d.Damage + ";" + d.StructureDamage + ";" + d.Instability + ";" + d.HeatDamage + ";" + d.ShotsWhenFired;
             r.DataCsv += ";" + d.MinRange + ";" + d.MediumRange + ";" + d.MaxRange;
             r.DataCsv += ";" + d.AccuracyModifier + ";" + d.CriticalChanceMultiplier + ";" + d.IndirectFireCapable + ";" + d.RefireModifier;
             r.DataCsv += ";" + d.AmmoCategoryToAmmoId + ";" + d.StartingAmmoCapacity;
+            r.DataCsv += ";" + effdmg + ";" + accmod + ";" + rmod + ";" + ammotonns + ";" + efftonn + ";" + efftonndhs + ";" + rating + ";" + ratingdhs;
             return r;
         }
 
         private static DumperDataEntry GetWeaponDesc()
         {
-            DumperDataEntry r = GetCompDesc(4, 4);
+            DumperDataEntry r = GetCompDesc(5, 5);
             r.DataTxt[0] = "Weapon";
             r.DataTxt[1] = "Dmg/Struct/Inst/Heat*numShots";
             r.DataTxt[2] = "minRange/optRange/maxRange";
             r.DataTxt[3] = "AccAdd/CritChanceMult/IndirectFire/Refire";
             r.DataTxt[4] = "Ammo/Internal";
+            r.DataTxt[5] = "effTonn/effTonnDHS/rating/ratingDHS";
             r.DataCsv += ";Dmg;Struct;Inst;Heat;numShots";
             r.DataCsv += ";minRange;optRange;maxRange";
             r.DataCsv += ";AccAdd;CritChanceMult;IndirectFire;Refire";
             r.DataCsv += ";Ammo;Internal";
+            r.DataCsv += ";effectiveDamage;accuracyFactor;rangeFactor;ammoTonnage10;effectiveTonnage;effectiveTonnageDHS;rating;ratingDHS";
             return r;
+        }
+
+        private static float GetWeaponRangeFactor(WeaponDef d)
+        {
+            float one = 375; // l laser, 1
+            float s = 90f; // s laser, 0.75
+            float r = (d.MediumRange - d.MinRange) + (d.MaxRange - d.MediumRange) / 2;
+            // rating = del * range + b;
+            float del = (1 - 0.75f) / (one - s);
+            float b = 1 - (del * one);
+            return del * r + b;
         }
     }
 }
