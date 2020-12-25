@@ -16,7 +16,9 @@ namespace BTMechDumper
     class BTMechDumper
     {
         public delegate int SMA_GetNumPartsForAssembly(SimGameState s, MechDef m);
+        public delegate void CLoc_Localize(ref string text);
         public static SMA_GetNumPartsForAssembly Del_SMA_GetNumPartsForAssembly = null;
+        public static CLoc_Localize Del_CLoc_Localize = null;
 
         public static void Init(string dir, string sett)
         {
@@ -29,10 +31,19 @@ namespace BTMechDumper
                     Type t = a.GetType("BTSimpleMechAssembly.SimpleMechAssembly_Main");
                     Del_SMA_GetNumPartsForAssembly = (SMA_GetNumPartsForAssembly) Delegate.CreateDelegate(typeof(SMA_GetNumPartsForAssembly), t.GetMethod("GetNumPartsForAssembly"));
                 }
+                else if (a.GetName().Name.Equals("CustomLocalization"))
+                {
+                    Type t = a.GetType("CustomTranslation.Text_Append");
+                    Del_CLoc_Localize = (CLoc_Localize)Delegate.CreateDelegate(typeof(CLoc_Localize), t.GetMethods().Single((m)=> m.Name.Equals("Localize") && m.GetParameters().Length==1));
+                }
             }
         }
 
-
+        public static string TryLoc(string i)
+        {
+            Del_CLoc_Localize?.Invoke(ref i);
+            return i;
+        }
 
         public static void DumpData(SimGameState s)
         {
@@ -72,6 +83,8 @@ namespace BTMechDumper
             mechs.Add(GetMechDesc());
             foreach (KeyValuePair<string, MechDef> kv in s.DataManager.MechDefs)
             {
+                if (IsMechDefCustom(kv.Value) || IsMechDefCUVehicle(kv.Value))
+                    continue;
                 int part = s.GetItemCount(kv.Key, "MECHPART", SimGameState.ItemCountType.UNDAMAGED_ONLY);
                 int mechstor = s.GetItemCount(kv.Value.Chassis.Description.Id, kv.Value.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY);
                 int active = 0;
@@ -200,6 +213,16 @@ namespace BTMechDumper
             public string Sort;
         }
 
+        public static bool IsMechDefCustom(MechDef d)
+        {
+            return d.Description.Id.Contains("mechdef_CUSTOM_");
+        }
+
+        public static bool IsMechDefCUVehicle(MechDef d)
+        {
+            return d.Description.Id.Contains("vehicledef_");
+        }
+
         private static readonly ChassisLocations[] AllChassisLocs = new ChassisLocations[] { ChassisLocations.Head, ChassisLocations.CenterTorso, ChassisLocations.LeftTorso, ChassisLocations.RightTorso,
             ChassisLocations.LeftArm, ChassisLocations.RightArm, ChassisLocations.LeftLeg, ChassisLocations.RightLeg };
         private static readonly string[] ExtrasToNote = new string[] { "chassis_ferro", "chassis_endo", "chassis_dhs", "chassis_omni" };
@@ -208,8 +231,8 @@ namespace BTMechDumper
         {
             DumperDataEntry r = new DumperDataEntry();
             r.DataTxt = new string[9];
-            r.DataTxt[0] = ((storage+active)>0 ? "+" : "-") + d.Chassis.Tonnage + "t " + d.Chassis.Description.UIName + " " + d.Chassis.VariantName;
-            r.DataTxt[1] = d.Chassis.StockRole + "";
+            r.DataTxt[0] = ((storage+active)>0 ? "+" : "-") + d.Chassis.Tonnage + "t " + TryLoc(d.Chassis.Description.UIName) + " " + TryLoc(d.Chassis.VariantName);
+            r.DataTxt[1] = TryLoc(d.Chassis.StockRole) + "";
             int bal = 0;
             int en = 0;
             int mis = 0;
@@ -353,7 +376,7 @@ namespace BTMechDumper
         {
             DumperDataEntry r = new DumperDataEntry();
             r.DataTxt = new string[4 + size];
-            r.DataTxt[0] = d.Description.UIName + " " + d.Description.Manufacturer + " " + d.Description.Model;
+            r.DataTxt[0] = TryLoc(d.Description.UIName) + " " + TryLoc(d.Description.Manufacturer) + " " + TryLoc(d.Description.Model);
             r.DataTxt[1 + off] = d.Tonnage + "/" + d.InventorySize + "/" + d.CanExplode;
             r.DataTxt[2 + off] = d.Description.Id + "";
             r.DataTxt[3 + off] = d.BonusValueA + "";
