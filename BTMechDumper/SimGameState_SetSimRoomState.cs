@@ -16,7 +16,7 @@ namespace BTMechDumper
     {
         public static void Prefix(SimGameState __instance, DropshipLocation state)
         {
-            if (state==DropshipLocation.MECH_BAY)
+            if (state==DropshipLocation.MECH_BAY && Input.GetKey(KeyCode.LeftShift))
             {
                 BTMechDumper.DumpData(__instance);
             }

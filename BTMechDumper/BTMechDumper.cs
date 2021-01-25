@@ -47,6 +47,7 @@ namespace BTMechDumper
 
         public static void DumpData(SimGameState s)
         {
+            string last = "";
             try
             {
                 string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -57,13 +58,13 @@ namespace BTMechDumper
                 StreamWriter ucsv = new StreamWriter(dir + "\\BTDumpUpgrades.csv", false);
                 w.WriteLine("BTDumper: " + s.CompanyName + " " + s.CurrentDate.ToString("dd-MM-yyyy"));
                 w.WriteLine();
-                DumpMechs(s, w, mcsv);
+                DumpMechs(s, w, mcsv, out last);
                 w.WriteLine();
-                DumpWeapons(s, w, wcsv);
+                DumpWeapons(s, w, wcsv, out last);
                 w.WriteLine();
-                DumpAmmo(s, w, acsv);
+                DumpAmmo(s, w, acsv, out last);
                 w.WriteLine();
-                DumpUpgrades(s, w, ucsv);
+                DumpUpgrades(s, w, ucsv, out last);
                 w.Close();
                 mcsv.Close();
                 wcsv.Close();
@@ -72,17 +73,19 @@ namespace BTMechDumper
             }
             catch (Exception e)
             {
-                FileLog.Log(e.Message);
+                FileLog.Log(last);
+                FileLog.Log(e.ToString());
             }
         }
 
-        public static void DumpMechs(SimGameState s, StreamWriter w, StreamWriter csv)
+        public static void DumpMechs(SimGameState s, StreamWriter w, StreamWriter csv, out string last)
         {
             List<DumperDataEntry> mechs = new List<DumperDataEntry>();
             Dictionary<string, DumperDataEntry> blacklist = new Dictionary<string, DumperDataEntry>();
             mechs.Add(GetMechDesc());
             foreach (KeyValuePair<string, MechDef> kv in s.DataManager.MechDefs)
             {
+                last = kv.Key;
                 if (IsMechDefCustom(kv.Value) || IsMechDefCUVehicle(kv.Value))
                     continue;
                 int part = s.GetItemCount(kv.Key, "MECHPART", SimGameState.ItemCountType.UNDAMAGED_ONLY);
@@ -110,6 +113,7 @@ namespace BTMechDumper
             }
             foreach (KeyValuePair<string, ItemCollectionDef> kv in s.DataManager.ItemCollectionDefs)
             {
+                last = kv.Key;
                 foreach (ItemCollectionDef.Entry e in kv.Value.Entries)
                 {
                     if (e.Type==ShopItemType.Mech || e.Type == ShopItemType.MechPart)
@@ -122,16 +126,19 @@ namespace BTMechDumper
                     }
                 }
             }
+            last = "write";
             WriteDataEntries(mechs, w, csv);
+            WriteDataEntries(blacklist.Values, null, csv);
         }
 
-        private static void DumpWeapons(SimGameState s, StreamWriter w, StreamWriter csv)
+        private static void DumpWeapons(SimGameState s, StreamWriter w, StreamWriter csv, out string last)
         {
             List<DumperDataEntry> weps = new List<DumperDataEntry>();
             weps.Add(GetWeaponDesc());
             Dictionary<string, float> ammoShotsPerTon = new Dictionary<string, float>();
             foreach (KeyValuePair<string, AmmunitionBoxDef> kv in s.DataManager.AmmoBoxDefs)
             {
+                last = kv.Key;
                 float apt = kv.Value.Capacity / kv.Value.Tonnage;
                 if (!ammoShotsPerTon.ContainsKey(kv.Value.AmmoID))
                 {
@@ -144,40 +151,48 @@ namespace BTMechDumper
             }
             foreach (KeyValuePair<string, WeaponDef> kv in s.DataManager.WeaponDefs)
             {
+                last = kv.Key;
                 if (kv.Value.WeaponCategoryValue.IsMelee || kv.Value.WeaponSubType==WeaponSubType.AIImaginary || kv.Value.WeaponEffectID.Contains("WeaponEffect-Artillery"))
                     continue;
                 weps.Add(FillWeapon(kv.Value, ammoShotsPerTon));
             }
+            last = "write";
             WriteDataEntries(weps, w, csv);
         }
 
-        private static void DumpAmmo(SimGameState s, StreamWriter w, StreamWriter csv)
+        private static void DumpAmmo(SimGameState s, StreamWriter w, StreamWriter csv, out string last)
         {
             List<DumperDataEntry> l = new List<DumperDataEntry>();
             l.Add(GetAmmoDesc());
             foreach (KeyValuePair<string, AmmunitionBoxDef> kv in s.DataManager.AmmoBoxDefs)
             {
+                last = kv.Key;
                 l.Add(FillAmmo(kv.Value));
             }
+            last = "write";
             WriteDataEntries(l, w, csv);
         }
 
-        private static void DumpUpgrades(SimGameState s, StreamWriter w, StreamWriter csv)
+        private static void DumpUpgrades(SimGameState s, StreamWriter w, StreamWriter csv, out string last)
         {
             List<DumperDataEntry> l = new List<DumperDataEntry>();
             l.Add(GetCompDesc());
             foreach (KeyValuePair<string, UpgradeDef> kv in s.DataManager.UpgradeDefs)
             {
+                last = kv.Key;
                 l.Add(FillComp(kv.Value));
             }
             foreach (KeyValuePair<string, JumpJetDef> kv in s.DataManager.JumpJetDefs)
             {
+                last = kv.Key;
                 l.Add(FillComp(kv.Value));
             }
             foreach (KeyValuePair<string, HeatSinkDef> kv in s.DataManager.HeatSinkDefs)
             {
+                last = kv.Key;
                 l.Add(FillComp(kv.Value));
             }
+            last = "write";
             WriteDataEntries(l, w, csv);
         }
 
@@ -186,21 +201,24 @@ namespace BTMechDumper
             return new string(' ', l - s.Length + 1);
         }
 
-        private static void WriteDataEntries(List<DumperDataEntry> l, StreamWriter w, StreamWriter csv=null)
+        private static void WriteDataEntries(IEnumerable<DumperDataEntry> l, StreamWriter w, StreamWriter csv=null)
         {
-            int[] len = new int[l[0].DataTxt.Length];
-            for (int i=0; i < l[0].DataTxt.Length; i++)
+            int[] len = new int[l.First().DataTxt.Length];
+            for (int i=0; i < l.First().DataTxt.Length; i++)
             {
                 len[i] = l.Max((e) => e.DataTxt[i].Length);
             }
             foreach (DumperDataEntry d in l.OrderBy((d)=>d.Sort))
             {
-                for (int i = 0; i < d.DataTxt.Length; i++)
+                if (w != null)
                 {
-                    w.Write(d.DataTxt[i]);
-                    w.Write(GetSpacingFor(d.DataTxt[i], len[i]));
+                    for (int i = 0; i < d.DataTxt.Length; i++)
+                    {
+                        w.Write(d.DataTxt[i]);
+                        w.Write(GetSpacingFor(d.DataTxt[i], len[i]));
+                    }
+                    w.WriteLine(); 
                 }
-                w.WriteLine();
                 if (csv != null)
                     csv.WriteLine(d.DataCsv);
             }
