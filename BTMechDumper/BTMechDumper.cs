@@ -11,6 +11,8 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
+[assembly:AssemblyVersion("1.2.0")]
+
 namespace BTMechDumper
 {
     class BTMechDumper

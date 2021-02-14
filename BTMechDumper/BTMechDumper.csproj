@@ -60,6 +60,7 @@
     </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>C:\goggames\BATTLETECH\BattleTech_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>

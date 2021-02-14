@@ -3,7 +3,7 @@
 Mod for BattleTech
 
 Utlility tool to read mech and mechpart data from the game and write it into a easy readable txt format and a few csv files.  
-The files are written every time you enter the Mechbay on your Argo/Leopard.  
+The files are written when you enter the Mechbay on your Argo/Leopard while pressing shift.  
 BTDump.txt file:  
 Consists of multiple parts, first the company name and date, followed by a mech list (the + and - in front of a mechs name shows if you already have one of this type),  
 followed by all weapons types, all ammobox types, and last all other components together (upgrades, heatsinks & jumpjets).  
