@@ -103,9 +103,17 @@ namespace BTMechDumper
                         //d = a.Value;
                     }
                 }
-                if (Del_SMA_GetNumPartsForAssembly!=null)
+                try
                 {
-                    sma_parts = Del_SMA_GetNumPartsForAssembly(s, kv.Value);
+                    if (Del_SMA_GetNumPartsForAssembly != null)
+                    {
+                        sma_parts = Del_SMA_GetNumPartsForAssembly(s, kv.Value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Log(last);
+                    FileLog.Log(ex.ToString());
                 }
                 DumperDataEntry e = FillMech(d, part, s.Constants.Story.DefaultMechPartMax, mechstor, active, sma_parts);
                 if (kv.Value.MechTags.Contains("BLACKLISTED"))
