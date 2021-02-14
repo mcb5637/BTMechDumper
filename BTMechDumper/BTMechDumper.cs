@@ -53,25 +53,30 @@ namespace BTMechDumper
             try
             {
                 string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                StreamWriter w = new StreamWriter(dir + "\\BTDump.txt", false);
-                StreamWriter mcsv = new StreamWriter(dir + "\\BTDumpMechs.csv", false);
-                StreamWriter wcsv = new StreamWriter(dir + "\\BTDumpWeapons.csv", false);
-                StreamWriter acsv = new StreamWriter(dir + "\\BTDumpAmmo.csv", false);
-                StreamWriter ucsv = new StreamWriter(dir + "\\BTDumpUpgrades.csv", false);
-                w.WriteLine("BTDumper: " + s.CompanyName + " " + s.CurrentDate.ToString("dd-MM-yyyy"));
-                w.WriteLine();
-                DumpMechs(s, w, mcsv, out last);
-                w.WriteLine();
-                DumpWeapons(s, w, wcsv, out last);
-                w.WriteLine();
-                DumpAmmo(s, w, acsv, out last);
-                w.WriteLine();
-                DumpUpgrades(s, w, ucsv, out last);
-                w.Close();
-                mcsv.Close();
-                wcsv.Close();
-                acsv.Close();
-                ucsv.Close();
+                using (StreamWriter w = new StreamWriter(dir + "\\BTDump.txt", false))
+                {
+                    w.WriteLine("BTDumper: " + s.CompanyName + " " + s.CurrentDate.ToString("dd-MM-yyyy"));
+                    w.WriteLine();
+                    using (StreamWriter mcsv = new StreamWriter(dir + "\\BTDumpMechs.csv", false))
+                    {
+                        DumpMechs(s, w, mcsv, out last); 
+                    }
+                    w.WriteLine();
+                    using (StreamWriter wcsv = new StreamWriter(dir + "\\BTDumpWeapons.csv", false))
+                    {
+                        DumpWeapons(s, w, wcsv, out last); 
+                    }
+                    w.WriteLine();
+                    using (StreamWriter acsv = new StreamWriter(dir + "\\BTDumpAmmo.csv", false))
+                    {
+                        DumpAmmo(s, w, acsv, out last); 
+                    }
+                    w.WriteLine();
+                    using (StreamWriter ucsv = new StreamWriter(dir + "\\BTDumpUpgrades.csv", false))
+                    {
+                        DumpUpgrades(s, w, ucsv, out last); 
+                    }
+                }
             }
             catch (Exception e)
             {
