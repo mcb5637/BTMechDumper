@@ -74,7 +74,11 @@ namespace BTMechDumper
                     w.WriteLine();
                     using (StreamWriter ucsv = new StreamWriter(dir + "\\BTDumpUpgrades.csv", false))
                     {
-                        DumpUpgrades(s, w, ucsv, out last); 
+                        DumpUpgrades(s, w, ucsv, out last);
+                    }
+                    using (StreamWriter vcsv = new StreamWriter(dir + "\\BTDumpVehicles.csv", false))
+                    {
+                        DumpVehicles(s, null, vcsv, out last);
                     }
                 }
             }
@@ -206,6 +210,19 @@ namespace BTMechDumper
             {
                 last = kv.Key;
                 l.Add(FillComp(kv.Value));
+            }
+            last = "write";
+            WriteDataEntries(l, w, csv);
+        }
+
+        private static void DumpVehicles(SimGameState s, StreamWriter w, StreamWriter csv, out string last)
+        {
+            List<DumperDataEntry> l = new List<DumperDataEntry>();
+            l.Add(GetVehicleDesc());
+            foreach (KeyValuePair<string, VehicleDef> kv in s.DataManager.VehicleDefs)
+            {
+                last = kv.Key;
+                l.Add(FillVehicle(kv.Value));
             }
             last = "write";
             WriteDataEntries(l, w, csv);
@@ -403,6 +420,50 @@ namespace BTMechDumper
             r.Sort = "";
             r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;useTonnsWithMArmor;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
             return r;
+        }
+
+        private static DumperDataEntry FillVehicle(VehicleDef v)
+        {
+            DumperDataEntry d = new DumperDataEntry();
+            d.DataTxt = new string[3];
+            d.Sort = $"{v.Chassis.Tonnage,3}_{TryLoc(v.Description.Name)}";
+            d.DataTxt[0] = v.Chassis.Tonnage + "t " + v.Description.Name;
+            d.DataTxt[1] = v.Chassis.MovementCapDef.MaxWalkDistance + "";
+            Dictionary<string, int> eq = new Dictionary<string, int>();
+            foreach (VehicleComponentRef c in v.Inventory)
+            {
+                if (c.ComponentDefType == ComponentType.Weapon)
+                {
+                    WeaponDef wep = c.Def as WeaponDef;
+                    if (wep != null && wep.WeaponCategoryValue.IsMelee || wep.WeaponSubType == WeaponSubType.AIImaginary || wep.WeaponEffectID.Contains("WeaponEffect-Artillery"))
+                        continue;
+                }
+                string key = c.Def.Description.Id;
+                if (eq.ContainsKey(key))
+                    eq[key]++;
+                else
+                    eq.Add(key, 1);
+            }
+            string txteq = "";
+            foreach (string key in eq.Keys.OrderBy((k) => k))
+            {
+                if (!string.IsNullOrEmpty(txteq))
+                    txteq += ",";
+                txteq += key + ":" + eq[key];
+            }
+            d.DataTxt[2] = txteq;
+            d.DataCsv = v.Chassis.Tonnage + ";" + TryLoc(v.Description.Name) + ";" + v.Chassis.MovementCapDef.MaxWalkDistance + ";" + v.Description.Id + ";" + v.Chassis.Description.Id + ";" + txteq;
+            return d;
+        }
+
+        private static DumperDataEntry GetVehicleDesc()
+        {
+            return new DumperDataEntry()
+            {
+                DataTxt = new string[] { "Vehicle", "Speed", "Equipment" },
+                DataCsv = "Tonnage;Vehicle;Speed;chassisID;vehicleID;equipment",
+                Sort = "",
+            };
         }
 
         private static DumperDataEntry FillComp(MechComponentDef d, int size=0, int off = 0)

@@ -68,4 +68,7 @@
     <Compile Include="SimGameState_SetSimRoomState.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>copy /Y "$(TargetPath)" "C:\goggames\BATTLETECH\Mods\BTMechDumper\$(TargetName).dll"</PostBuildEvent>
+  </PropertyGroup>
 </Project>
