@@ -17,9 +17,8 @@ namespace BTMechDumper
 {
     class BTMechDumper
     {
-        public delegate int SMA_GetNumPartsForAssembly(SimGameState s, MechDef m);
         public delegate void CLoc_Localize(ref string text);
-        public static SMA_GetNumPartsForAssembly Del_SMA_GetNumPartsForAssembly = null;
+        public static Func<SimGameState, MechDef, int> Del_SMA_GetNumPartsForAssembly = null;
         public static CLoc_Localize Del_CLoc_Localize = null;
 
         public static void Init(string dir, string sett)
@@ -27,23 +26,48 @@ namespace BTMechDumper
             var harmony = HarmonyInstance.Create("com.github.mcb5637.BTMechDumper");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             // some reflection magic to get a delegate of BTSimpleMechAssembly.SimpleMechAssembly_Main.GetNumPartsForAssembly if that mod is loaded
+            Del_SMA_GetNumPartsForAssembly = (s, m) => -1; // default
+            GetDelegateFromAssembly("BTSimpleMechAssembly", "BTSimpleMechAssembly.SimpleMechAssembly_Main", "GetNumPartsForAssembly", ref Del_SMA_GetNumPartsForAssembly);
+            Del_CLoc_Localize = (ref string t) => { };
+            GetDelegateFromAssembly("CustomLocalization", "CustomTranslation.Text_Append", "Localize", ref Del_CLoc_Localize, (m) => m.GetParameters().Length == 1);
+        }
+
+
+        /// <summary>
+        /// searches all loades assemblies for a matching static method and generates an delegate to it.
+        /// </summary>
+        /// <typeparam name="T">type of delegate</typeparam>
+        /// <param name="assembly">assembly (dll) filename</param>
+        /// <param name="type">fully qualified type name (namespace.Typename)</param>
+        /// <param name="method">method name</param>
+        /// <param name="del">reference to delegate variable. only written if something found</param>
+        /// <param name="pred">optional predicate to filter methods</param>
+        /// <returns>true, if delegate was created successfully</returns>
+        public static bool GetDelegateFromAssembly<T>(string assembly, string type, string method, ref T del, Func<MethodInfo, bool> pred = null) where T : Delegate
+        {
+            if (pred == null)
+            {
+                pred = (i) => true;
+            }
             foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (a.GetName().Name.Equals("BTSimpleMechAssembly")) {
-                    Type t = a.GetType("BTSimpleMechAssembly.SimpleMechAssembly_Main");
-                    Del_SMA_GetNumPartsForAssembly = (SMA_GetNumPartsForAssembly) Delegate.CreateDelegate(typeof(SMA_GetNumPartsForAssembly), t.GetMethod("GetNumPartsForAssembly"));
-                }
-                else if (a.GetName().Name.Equals("CustomLocalization"))
+                if (a.GetName().Name.Equals(assembly))
                 {
-                    Type t = a.GetType("CustomTranslation.Text_Append");
-                    Del_CLoc_Localize = (CLoc_Localize)Delegate.CreateDelegate(typeof(CLoc_Localize), t.GetMethods().Single((m)=> m.Name.Equals("Localize") && m.GetParameters().Length==1));
+                    Type t = a.GetType(type);
+                    if (t != null)
+                    {
+                        MethodInfo m = t.GetMethods().Where((i) => i.Name.Equals(method)).Single(pred); // throws if more than one found
+                        del = (T)Delegate.CreateDelegate(typeof(T), m);
+                        return true;
+                    }
                 }
             }
+            return false;
         }
 
         public static string TryLoc(string i)
         {
-            Del_CLoc_Localize?.Invoke(ref i);
+            Del_CLoc_Localize(ref i);
             return i;
         }
 
@@ -114,10 +138,7 @@ namespace BTMechDumper
                 }
                 try
                 {
-                    if (Del_SMA_GetNumPartsForAssembly != null)
-                    {
-                        sma_parts = Del_SMA_GetNumPartsForAssembly(s, kv.Value);
-                    }
+                    sma_parts = Del_SMA_GetNumPartsForAssembly(s, kv.Value);
                 }
                 catch (Exception ex)
                 {
