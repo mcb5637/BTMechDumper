@@ -5,9 +5,13 @@
   "Description": "Dumps mech data",
   "Author": "mcb",
   "Website": "https://github.com/mcb5637/BTMechDumper",
-  "Version": "1.2",
+  "Version": "1.2.1",
 
   "OptionallyDependsOn": [ "BTSimpleMechAssembly" ],
 
-  "DLL": "BTMechDumper.dll"
+  "DLL": "BTMechDumper.dll",
+
+  "Settings": {
+    "CheckMechs": true
+  }
 }

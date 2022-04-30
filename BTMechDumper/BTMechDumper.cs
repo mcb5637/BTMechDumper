@@ -1,6 +1,5 @@
 ﻿using BattleTech;
 using Harmony;
-using Org.BouncyCastle.Crypto.Digests;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,8 +9,11 @@ using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using AccessExtension;
+using Newtonsoft.Json;
+using Localize;
 
-[assembly:AssemblyVersion("1.2.0")]
+[assembly:AssemblyVersion("1.2.1")]
 
 namespace BTMechDumper
 {
@@ -20,6 +22,7 @@ namespace BTMechDumper
         public delegate void CLoc_Localize(ref string text);
         public static Func<SimGameState, MechDef, int> Del_SMA_GetNumPartsForAssembly = null;
         public static CLoc_Localize Del_CLoc_Localize = null;
+        internal static Settings Sett;
 
         public static void Init(string dir, string sett)
         {
@@ -27,42 +30,18 @@ namespace BTMechDumper
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             // some reflection magic to get a delegate of BTSimpleMechAssembly.SimpleMechAssembly_Main.GetNumPartsForAssembly if that mod is loaded
             Del_SMA_GetNumPartsForAssembly = (s, m) => -1; // default
-            GetDelegateFromAssembly("BTSimpleMechAssembly", "BTSimpleMechAssembly.SimpleMechAssembly_Main", "GetNumPartsForAssembly", ref Del_SMA_GetNumPartsForAssembly);
+            AccessExtensionPatcher.GetDelegateFromAssembly("BTSimpleMechAssembly", "BTSimpleMechAssembly.SimpleMechAssembly_Main", "GetNumPartsForAssembly", ref Del_SMA_GetNumPartsForAssembly);
             Del_CLoc_Localize = (ref string t) => { };
-            GetDelegateFromAssembly("CustomLocalization", "CustomTranslation.Text_Append", "Localize", ref Del_CLoc_Localize, (m) => m.GetParameters().Length == 1);
-        }
-
-
-        /// <summary>
-        /// searches all loades assemblies for a matching static method and generates an delegate to it.
-        /// </summary>
-        /// <typeparam name="T">type of delegate</typeparam>
-        /// <param name="assembly">assembly (dll) filename</param>
-        /// <param name="type">fully qualified type name (namespace.Typename)</param>
-        /// <param name="method">method name</param>
-        /// <param name="del">reference to delegate variable. only written if something found</param>
-        /// <param name="pred">optional predicate to filter methods</param>
-        /// <returns>true, if delegate was created successfully</returns>
-        public static bool GetDelegateFromAssembly<T>(string assembly, string type, string method, ref T del, Func<MethodInfo, bool> pred = null) where T : Delegate
-        {
-            if (pred == null)
+            AccessExtensionPatcher.GetDelegateFromAssembly("CustomLocalization", "CustomTranslation.Text_Append", "Localize", ref Del_CLoc_Localize, (m) => m.GetParameters().Length == 1);
+            try
             {
-                pred = (i) => true;
+                Sett = JsonConvert.DeserializeObject<Settings>(sett);
             }
-            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+            catch (Exception e)
             {
-                if (a.GetName().Name.Equals(assembly))
-                {
-                    Type t = a.GetType(type);
-                    if (t != null)
-                    {
-                        MethodInfo m = t.GetMethods().Where((i) => i.Name.Equals(method)).Single(pred); // throws if more than one found
-                        del = (T)Delegate.CreateDelegate(typeof(T), m);
-                        return true;
-                    }
-                }
+                FileLog.Log(e.ToString());
+                Sett = new Settings();
             }
-            return false;
         }
 
         public static string TryLoc(string i)
@@ -420,6 +399,22 @@ namespace BTMechDumper
             r.DataCsv += ";" + maxparts;
             r.DataCsv += ";" + d.Chassis.Description.Id + ";" + d.Description.Id;
             r.DataCsv += ";" + txtext + ";" + txteq + ";" + txtfeq;
+            if (Sett.CheckMechs)
+            {
+                string valid = "";
+                foreach (KeyValuePair<MechValidationType, List<Text>> kv in MechValidationRules.ValidateMechDef(MechValidationLevel.Full, d.DataManager, d, null))
+                {
+                    foreach (Text t in kv.Value)
+                    {
+                        if (valid.Length > 0)
+                            valid += " | ";
+                        valid += t.ToString();
+                    }
+                }
+                if (valid.Length == 0)
+                    valid = "ok";
+                r.DataCsv += ";" + valid;
+            }
             return r;
         }
 
@@ -440,6 +435,8 @@ namespace BTMechDumper
             };
             r.Sort = "";
             r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;useTonnsWithMArmor;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
+            if (Sett.CheckMechs)
+                r.DataCsv += ";validation";
             return r;
         }
 

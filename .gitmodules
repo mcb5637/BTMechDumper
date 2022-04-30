@@ -1,0 +1,3 @@
+[submodule "BTMechDumper/AEP"]
+	path = BTMechDumper/AEP
+	url = https://github.com/mcb5637/AccessExtensionPatcher.git
