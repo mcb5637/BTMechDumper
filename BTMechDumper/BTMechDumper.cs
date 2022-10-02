@@ -235,24 +235,31 @@ namespace BTMechDumper
 
         private static void WriteDataEntries(IEnumerable<DumperDataEntry> l, StreamWriter w, StreamWriter csv=null)
         {
-            int[] len = new int[l.First().DataTxt.Length];
-            for (int i=0; i < l.First().DataTxt.Length; i++)
+            try
             {
-                len[i] = l.Max((e) => e.DataTxt[i].Length);
-            }
-            foreach (DumperDataEntry d in l.OrderBy((d)=>d.Sort))
-            {
-                if (w != null)
+                int[] len = new int[l.First().DataTxt.Length];
+                for (int i = 0; i < l.First().DataTxt.Length; i++)
                 {
-                    for (int i = 0; i < d.DataTxt.Length; i++)
-                    {
-                        w.Write(d.DataTxt[i]);
-                        w.Write(GetSpacingFor(d.DataTxt[i], len[i]));
-                    }
-                    w.WriteLine(); 
+                    len[i] = l.Max((e) => e.DataTxt[i].Length);
                 }
-                if (csv != null)
-                    csv.WriteLine(d.DataCsv);
+                foreach (DumperDataEntry d in l.OrderBy((d) => d.Sort))
+                {
+                    if (w != null)
+                    {
+                        for (int i = 0; i < d.DataTxt.Length; i++)
+                        {
+                            w.Write(d.DataTxt[i]);
+                            w.Write(GetSpacingFor(d.DataTxt[i], len[i]));
+                        }
+                        w.WriteLine();
+                    }
+                    if (csv != null)
+                        csv.WriteLine(d.DataCsv);
+                }
+            }
+            catch (InvalidOperationException) // empty
+            {
+                return;
             }
         }
 
