@@ -12,6 +12,7 @@ using UnityEngine;
 using AccessExtension;
 using Newtonsoft.Json;
 using Localize;
+using HBS.Collections;
 
 [assembly:AssemblyVersion("1.2.1")]
 
@@ -405,7 +406,7 @@ namespace BTMechDumper
                 r.DataCsv += "(" + sma_parts + ")";
             r.DataCsv += ";" + maxparts;
             r.DataCsv += ";" + d.Chassis.Description.Id + ";" + d.Description.Id;
-            r.DataCsv += ";" + txtext + ";" + txteq + ";" + txtfeq;
+            r.DataCsv += ";" + txtext + ";" + tagsToString(d.MechTags) + ";" + tagsToString(d.Chassis.ChassisTags) + ";" + txteq + ";" + txtfeq;
             if (Sett.CheckMechs)
             {
                 string valid = "";
@@ -423,6 +424,13 @@ namespace BTMechDumper
                 r.DataCsv += ";" + valid;
             }
             return r;
+
+            string tagsToString(TagSet s)
+            {
+                if (s.IsEmpty)
+                    return "";
+                return s.Aggregate((a, b) => a + "|" + b);
+            }
         }
 
         private static DumperDataEntry GetMechDesc()
@@ -441,7 +449,7 @@ namespace BTMechDumper
                 "extras/Equip/FixedEquip",
             };
             r.Sort = "";
-            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;useTonnsWithMArmor;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;equipment;fixed equipment";
+            r.DataCsv = "Tonnage;Mech;Variant;Role;b;e;m;s;usetonns;heatsinks;carmorT;marmorT;useTonnsWithMArmor;walkspeed;jumpjets;melee dmg;melee istab;dfa dmg;dfa istab;active;storage;parts;partsneeded;chassisID;mechID;extras;mtags;ctags;equipment;fixed equipment";
             if (Sett.CheckMechs)
                 r.DataCsv += ";validation";
             return r;
