@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 using Localize;
 using HBS.Collections;
 
-[assembly:AssemblyVersion("1.2.1")]
+[assembly:AssemblyVersion("1.2.2")]
 
 namespace BTMechDumper
 {
